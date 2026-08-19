@@ -123,6 +123,65 @@ header{
 .btn.ghost{border-style:dashed; color:var(--ink-2)}
 .btn[disabled]{opacity:.4; cursor:not-allowed}
 
+/* ---------- 跟读反馈 ---------- */
+.shadow-bar{
+  display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+  margin-top:10px; padding-top:12px; border-top:1px dashed var(--line-2);
+}
+.mic{
+  display:inline-flex; align-items:center; gap:7px;
+  font-family:var(--f-sans); font-size:13.5px; font-weight:600;
+  border:1px solid var(--accent); background:var(--surface); color:var(--accent);
+  padding:8px 14px; border-radius:999px; cursor:pointer;
+}
+.mic:hover{background:var(--accent-soft)}
+.mic[data-rec="1"]{background:var(--hot); border-color:var(--hot); color:#fff}
+.mic:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.mic[disabled]{opacity:.45; cursor:not-allowed}
+.shadow-msg{font-family:var(--f-mono); font-size:12.5px; color:var(--ink-3)}
+.heard{
+  margin-top:11px; padding:13px 15px; border-radius:10px;
+  background:var(--surface-2); font-size:16px; line-height:1.75;
+}
+.heard .lab{
+  font-family:var(--f-mono); font-size:11px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--ink-3); margin-bottom:5px;
+}
+.heard .w-ok{color:var(--accent); font-weight:600}
+.heard .w-bad{
+  color:var(--hot); font-weight:600; text-decoration:underline;
+  text-decoration-style:wavy; text-underline-offset:3px;
+}
+.heard .score{
+  margin-top:10px; padding-top:9px; border-top:1px solid var(--line);
+  font-size:14.5px; color:var(--ink-2);
+}
+.heard .score b{color:var(--ink)}
+
+/* ---------- 复习卡 ---------- */
+.srshint{margin:0 0 16px; color:var(--ink-2); font-size:15px}
+.srsface{
+  text-align:center; padding:26px 16px 20px;
+  border:1px solid var(--line); border-radius:12px; background:var(--surface-2);
+}
+.srsword{
+  font-family:var(--f-sans); font-weight:800; font-size:34px;
+  letter-spacing:-.02em; line-height:1.2;
+}
+.srsipa{font-family:var(--f-mono); font-size:14px; color:var(--accent); margin-top:5px}
+.srsback{margin-top:16px; padding-top:15px; border-top:1px dashed var(--line)}
+.srszh{font-size:19px; font-weight:600}
+.srsex{margin-top:9px; font-size:16px; color:var(--ink-2)}
+.srsex em{font-style:normal; display:block; font-size:14px; color:var(--ink-3); margin-top:2px}
+.srsrow{display:flex; gap:9px; margin-top:15px; flex-wrap:wrap}
+.srsrow .btn{flex:1; min-width:110px; text-align:center}
+.btn.bad{border-color:var(--hot); color:var(--hot)}
+.btn.bad:hover{background:var(--hot-soft); color:var(--hot)}
+.srsdone{
+  text-align:center; padding:22px 16px; color:var(--ink-2); font-size:16px;
+}
+.srsdone b{color:var(--accent)}
+
 /* ---------- 难度校准 ---------- */
 .calib{
   margin-top:16px; background:var(--surface); border:1px solid var(--line);
@@ -502,6 +561,24 @@ footer{
     </div>
   </details>
 
+  <!-- 复习：按遗忘曲线从学过的词里挑，排在新内容之前 -->
+  <section class="mod" id="srsMod" hidden>
+    <div class="modhead">
+      <span class="modnum mono">00</span>
+      <h2>先复习</h2>
+      <span class="mins" id="srsCount"></span>
+      <button class="done-btn" type="button" id="srsSkip">
+        <span class="tick">✓</span><span class="lbl">跳过</span>
+      </button>
+    </div>
+    <div class="modbody">
+      <p class="srshint">这些是你前几天学过、按时间该忘掉的词。
+        <b>先自己说出中文意思再翻开</b>，说得出就点「记得」，说不出点「忘了」——
+        忘了的会更早再出现。</p>
+      <div id="srsCard"></div>
+    </div>
+  </section>
+
   <div id="modules"></div>
 
   <!-- ============ 打卡 ============ -->
@@ -573,7 +650,7 @@ footer{
   <footer>
     起点 2026-08-19 · 目标 2026-12-30 能用英语做工作交流。<br>
     进度存在本机浏览器里；换设备用上面的「同步到另一台设备」。计划要调整就跟 Claude 说。<br>
-    <span class="mono" style="opacity:.65">内容版本 08-19 14:36 ·
+    <span class="mono" style="opacity:.65">内容版本 08-19 14:46 ·
       看不到最新内容就强制刷新（电脑 Ctrl/Cmd+Shift+R，手机长按刷新键）</span>
   </footer>
 </div>
@@ -583,7 +660,7 @@ footer{
      handler 里直接改这些节点的属性，改动会被保存并同步到其他设备。
      ============================================================ -->
 <ul artifact-sync id="store" hidden>
-<li data-day="0" data-offset="0"></li>
+<li data-day="0" data-offset="0"><span class="srs"></span></li>
 <li data-day="1"><span class="n"></span></li>
 <li data-day="2"><span class="n"></span></li>
 <li data-day="3"><span class="n"></span></li>
@@ -773,10 +850,23 @@ footer{
     mirrorLocal(); flashSaved();
   }
 
-  // 今天对应第几天（含校准偏移；早于起点算 1，晚于终点算 TOTAL）
+  // 今天该学第几天。
+  // 关键：按「学完了几天」推进，不按日历。出差漏了三天，回来接着上次那天学，
+  // 中间的内容不会被永久跳过。日历只用来算距 12-30 还剩多久。
   function todayDay(){
-    var n = dayDiff(START, todayStr()) + 1 + offset();
-    return Math.min(Math.max(n,1), TOTAL);
+    var learned = 0;
+    for(var d = 1; d <= TOTAL; d++){
+      if(modsDone(d) > 0) learned = d;      // 最后一个动过的天
+    }
+    var next = learned + 1;
+    // 今天已经开始学了就停在今天，别往下跳
+    if(learned && modsDone(learned) < 4 && !dayFinished(learned)) next = learned;
+    return Math.min(Math.max(next + offset(), 1), TOTAL);
+  }
+
+  // 一天算不算"收工"：四块全勾，或者勾了开口那块（时间紧时的合法降级）
+  function dayFinished(d){
+    return modsDone(d) === 4 || getA(d, "s") === "1";
   }
 
   // ---------- 存档读写 ----------
@@ -799,6 +889,7 @@ footer{
                 m:li.getAttribute("data-m"), k:li.getAttribute("data-k"),
                 r:li.getAttribute("data-r"),
                 offset:li.getAttribute("data-offset"),
+                srs:(li.querySelector(".srs")||{}).textContent || "",
                 n:(li.querySelector(".n")||{}).textContent || ""};
       });
       localStorage.setItem(LS, JSON.stringify(o));
@@ -817,6 +908,7 @@ footer{
           if(s[f]) li.setAttribute("data-"+f, s[f]);
         });
         var n = li.querySelector(".n"); if(n && s.n) n.textContent = s.n;
+        var sr = li.querySelector(".srs"); if(sr && s.srs) sr.textContent = s.srs;
       });
     }catch(e){}
   }
@@ -853,7 +945,7 @@ footer{
     var c = modsDone(day);
     if(c === 4) return "done";
     if(c > 0) return "part";
-    if(day < todayDay()) return "miss";
+    // 进度按完成推进，前面不会有"漏掉"的天——没学的就是还没轮到
     return "todo";
   }
   function stats(){
@@ -906,7 +998,7 @@ footer{
                 '<span class="vipa">'+esc(v.ipa)+'</span></div>' +
               '<div class="vzh">'+esc(v.zh)+'</div>' +
               '<div class="vex">'+esc(v.ex)+speakBtn(v.ex)+
-                '<em>'+esc(v.ex_zh)+'</em></div>' +
+                '<em>'+esc(v.ex_zh)+'</em>'+shadowBar(v.ex)+'</div>' +
             '</div>';
           }).join("") + '</div>';
         }
@@ -917,7 +1009,7 @@ footer{
             '<div class="pen">'+esc(p.en)+speakBtn(p.en)+'</div>' +
             '<div class="pzh">'+esc(p.zh)+'</div>' +
             (p.ex ? '<div class="pex">'+esc(p.ex)+speakBtn(p.ex)+
-                    '<em>'+esc(p.ex_zh)+'</em></div>' : '') +
+                    '<em>'+esc(p.ex_zh)+'</em>'+shadowBar(p.ex)+'</div>' : '') +
           '</div>';
         }).join("");
       }
@@ -941,7 +1033,9 @@ footer{
           (S.model ?
             '<details class="model-wrap"><summary>说完再看参考答案</summary>' +
             '<div class="model">'+esc(S.model)+speakBtn(S.model)+
-            '<div class="zh">'+esc(S.model_zh)+'</div></div></details>' : '');
+            '<div class="zh">'+esc(S.model_zh)+'</div>'+
+            shadowBar(S.model.split(/(?<=[.!?])\s+/)[0] || S.model)+
+            '</div></details>' : '');
       }
 
       var on = getA(view, m.key) === "1" ? "1" : "0";
@@ -1099,6 +1193,18 @@ footer{
       hideJump();
     }
 
+    // 卡壳本：记下来不回看等于没记
+    var stuck = [];
+    for(var sd = Math.max(1, t - 7); sd <= t; sd++){
+      var note = getNote(sd);
+      if(note) stuck.push(note);
+    }
+    if(stuck.length >= 3){
+      body.push("📌 你最近记下了 <b>" + stuck.length + " 条卡壳的表达</b>。" +
+                "今天开口练习前，先把它们出声念一遍——" +
+                "记下来不回看等于没记，卡过一次的地方最容易再卡。");
+    }
+
     // 结业倒计时
     var left = dayDiff(todayStr(), END);
     if(left <= 14 && left >= 0){
@@ -1113,7 +1219,7 @@ footer{
   }
 
   function renderAll(){
-    renderHead(); renderModules(); renderLog();
+    renderHead(); renderSrs(); renderModules(); renderLog();
     renderStats(); renderMap(); renderCoach();
   }
 
@@ -1201,6 +1307,300 @@ footer{
   // 别人（或 Claude）改了存档 → 重新渲染
   document.addEventListener("claude:edit", function(){ renderAll(); });
 
+  // ---------- 跟读反馈 ----------
+  // 目的：解决"自己念错了不知道"。浏览器把你念的识别成文字，跟原句比对，
+  // 没被认出来的词大概率就是念错的那个。识别服务不通时降级成录音回放，
+  // 让她自己对比标准音和自己的声音——那也比什么反馈都没有强。
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var srBusy = null, mediaRec = null, recChunks = [], recBlobUrl = null;
+
+  function normWords(s){
+    return String(s || "").toLowerCase()
+      .replace(/[^a-z0-9'\s]/g, " ")
+      .split(/\s+/).filter(Boolean);
+  }
+
+  // 原句里的每个词有没有在识别结果里出现（顺序不严格，容错读慢读快）
+  function compare(target, heard){
+    var tw = normWords(target), hw = normWords(heard);
+    var pool = hw.slice(), out = [], hit = 0;
+    tw.forEach(function(w){
+      var i = pool.indexOf(w);
+      if(i === -1){
+        // 容许词形差异：ing/s/ed 结尾，或前 4 个字母相同
+        i = pool.findIndex(function(x){
+          return x.replace(/(ing|ed|s)$/,"") === w.replace(/(ing|ed|s)$/,"") ||
+                 (w.length > 4 && x.slice(0,4) === w.slice(0,4));
+        });
+      }
+      if(i >= 0){ pool.splice(i,1); out.push({w:w, ok:true}); hit++; }
+      else out.push({w:w, ok:false});
+    });
+    return {words:out, hit:hit, total:tw.length};
+  }
+
+  function shadowBox(el){
+    var box = el.parentNode.querySelector(".heard");
+    if(!box){
+      box = document.createElement("div");
+      box.className = "heard";
+      el.parentNode.appendChild(box);
+    }
+    return box;
+  }
+
+  function runRecognition(btn, target){
+    var rec = new SR();
+    rec.lang = "en-US";
+    rec.interimResults = false;
+    rec.maxAlternatives = 3;
+    var msgEl = btn.parentNode.querySelector(".shadow-msg");
+    btn.setAttribute("data-rec","1");
+    btn.querySelector(".mlbl").textContent = "在听…再说一遍就停";
+    msgEl.textContent = "";
+
+    var got = false;
+    rec.onresult = function(e){
+      got = true;
+      var alts = [];
+      for(var i = 0; i < e.results[0].length; i++) alts.push(e.results[0][i].transcript);
+      // 取比对得分最高的那个候选，别因为识别器选词不同就冤枉她
+      var best = null;
+      alts.forEach(function(a){
+        var c = compare(target, a);
+        if(!best || c.hit > best.c.hit) best = {a:a, c:c};
+      });
+      var c = best.c, pct = c.total ? Math.round(c.hit / c.total * 100) : 0;
+      var bad = c.words.filter(function(w){ return !w.ok; }).map(function(w){ return w.w; });
+      shadowBox(btn).innerHTML =
+        '<div class="lab">听到你说</div>' +
+        c.words.map(function(w){
+          return '<span class="' + (w.ok ? "w-ok" : "w-bad") + '">' + esc(w.w) + '</span>';
+        }).join(" ") +
+        '<div class="score">' +
+          (pct >= 90 ? '念得很准（<b>' + pct + '%</b>），下一句。' :
+           pct >= 70 ? '<b>' + pct + '%</b> 认出来了。带波浪线的没听清：<b>' +
+                       esc(bad.join("、")) + '</b>，单独把这几个词念 5 遍再整句重来。' :
+                       '只认出 <b>' + pct + '%</b>。别急着整句念——先点上面的 🔊 听三遍，' +
+                       '一个词一个词跟，再合起来。') +
+        '</div>';
+    };
+    rec.onerror = function(ev){
+      btn.setAttribute("data-rec","0");
+      btn.querySelector(".mlbl").textContent = "跟读打分";
+      if(ev.error === "not-allowed" || ev.error === "service-not-allowed"){
+        msgEl.textContent = "浏览器没给麦克风权限";
+      }else if(ev.error === "no-speech"){
+        msgEl.textContent = "没听到声音，再试一次";
+      }else{
+        // 识别服务在国内常连不上 —— 直接降级成录音回放
+        msgEl.textContent = "识别服务连不上，改用录音回放";
+        btn.setAttribute("data-mode","record");
+        startRecord(btn, target);
+      }
+    };
+    rec.onend = function(){
+      btn.setAttribute("data-rec","0");
+      btn.querySelector(".mlbl").textContent = "跟读打分";
+      srBusy = null;
+      if(!got && !msgEl.textContent) msgEl.textContent = "没听清，再来一次";
+    };
+    try{ rec.start(); srBusy = rec; }
+    catch(e){ btn.setAttribute("data-rec","0"); }
+  }
+
+  // 降级方案：录下来自己听
+  function startRecord(btn, target){
+    if(!navigator.mediaDevices || !window.MediaRecorder){
+      btn.parentNode.querySelector(".shadow-msg").textContent = "这个浏览器不支持录音";
+      return;
+    }
+    var msgEl = btn.parentNode.querySelector(".shadow-msg");
+    navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
+      recChunks = [];
+      mediaRec = new MediaRecorder(stream);
+      mediaRec.ondataavailable = function(e){ if(e.data.size) recChunks.push(e.data); };
+      mediaRec.onstop = function(){
+        stream.getTracks().forEach(function(t){ t.stop(); });
+        if(recBlobUrl) URL.revokeObjectURL(recBlobUrl);
+        recBlobUrl = URL.createObjectURL(new Blob(recChunks, {type:"audio/webm"}));
+        shadowBox(btn).innerHTML =
+          '<div class="lab">对比听</div>' +
+          '<div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center">' +
+            '<button class="btn" type="button" data-play="std">▶ 标准音</button>' +
+            '<button class="btn" type="button" data-play="mine">▶ 我念的</button>' +
+          '</div>' +
+          '<div class="score">连着听两遍，注意<b>哪个词的长短和重音不一样</b>——' +
+          '差别通常就在那儿。</div>';
+        shadowBox(btn).setAttribute("data-target", target);
+      };
+      mediaRec.start();
+      btn.setAttribute("data-rec","1");
+      btn.querySelector(".mlbl").textContent = "录音中…再点停止";
+      msgEl.textContent = "";
+    }).catch(function(){
+      msgEl.textContent = "麦克风打不开，检查浏览器权限";
+    });
+  }
+
+  function stopRecord(btn){
+    if(mediaRec && mediaRec.state === "recording") mediaRec.stop();
+    mediaRec = null;
+    btn.setAttribute("data-rec","0");
+    btn.querySelector(".mlbl").textContent = "录音跟读";
+  }
+
+  // 给一段文本挂上跟读条
+  function shadowBar(text){
+    var label = SR ? "跟读打分" : "录音跟读";
+    return '<div class="shadow-bar">' +
+      '<button class="mic" type="button" data-shadow="' + esc(text) + '" data-rec="0">' +
+        '<span>🎤</span><span class="mlbl">' + label + '</span>' +
+      '</button>' +
+      '<span class="shadow-msg"></span>' +
+    '</div>';
+  }
+
+  document.addEventListener("click", function(e){
+    var mic = e.target.closest(".mic[data-shadow]");
+    if(mic){
+      var text = mic.getAttribute("data-shadow");
+      var recording = mic.getAttribute("data-rec") === "1";
+      if(recording){
+        if(srBusy){ srBusy.stop(); }
+        else stopRecord(mic);
+        return;
+      }
+      if(SR && mic.getAttribute("data-mode") !== "record") runRecognition(mic, text);
+      else startRecord(mic, text);
+      return;
+    }
+    var play = e.target.closest("[data-play]");
+    if(play){
+      var box = play.closest(".heard");
+      if(play.getAttribute("data-play") === "std"){
+        speakText(box.getAttribute("data-target"));
+      }else if(recBlobUrl){
+        new Audio(recBlobUrl).play();
+      }
+      return;
+    }
+  });
+
+  // ---------- 间隔重复复习 ----------
+  // 简化版 SM-2：记住一次就把下次间隔拉长，忘了就打回从头再来。
+  // 存在 day=0 那行的 .srs 里，格式 "word:间隔:到期天 word:..."，用空格分隔。
+  var SRS_STEPS = [1, 2, 4, 8, 16, 30];   // 间隔天数阶梯
+
+  function srsEl(){
+    var r = STORE.querySelector('li[data-day="0"]');
+    return r ? r.querySelector(".srs") : null;
+  }
+  function srsRead(){
+    var el = srsEl(), out = {};
+    if(!el || !el.textContent) return out;
+    el.textContent.split(" ").forEach(function(t){
+      if(!t) return;
+      var p = t.split(":");
+      if(p.length < 3) return;
+      out[p[0]] = {step: parseInt(p[1],10) || 0, due: parseInt(p[2],10) || 0};
+    });
+    return out;
+  }
+  function srsWrite(map){
+    var el = srsEl(); if(!el) return;
+    el.textContent = Object.keys(map).map(function(w){
+      return w + ":" + map[w].step + ":" + map[w].due;
+    }).join(" ");
+    mirrorLocal(); flashSaved();
+  }
+
+  // 学过的天里所有词，按"今天是第几天"算到期
+  function srsDue(){
+    var map = srsRead(), t = todayDay(), due = [];
+    var seen = {};
+    for(var d = 1; d < t; d++){
+      if(modsDone(d) === 0) continue;           // 没学过的天不进复习池
+      var day = CUR[d-1]; if(!day || !day.vocab) continue;
+      day.vocab.forEach(function(v){
+        if(seen[v.w]) return;
+        seen[v.w] = 1;
+        var s = map[v.w];
+        if(!s){ due.push({v:v, from:d, step:0}); }      // 学过但没复习过
+        else if(s.due <= t){ due.push({v:v, from:d, step:s.step}); }
+      });
+    }
+    // 忘得最久的排前面，一次最多 8 个，不占太多时间
+    due.sort(function(a,b){ return a.step - b.step || a.from - b.from; });
+    return due.slice(0, 8);
+  }
+
+  var srsQueue = [], srsIdx = 0, srsFlipped = false, srsSkipped = false;
+
+  function renderSrs(){
+    var mod = document.getElementById("srsMod");
+    if(srsSkipped || view !== todayDay()){ mod.hidden = true; return; }
+    if(srsIdx === 0) srsQueue = srsDue();
+    if(!srsQueue.length){ mod.hidden = true; return; }
+    mod.hidden = false;
+
+    if(srsIdx >= srsQueue.length){
+      document.getElementById("srsCount").textContent = "";
+      document.getElementById("srsCard").innerHTML =
+        '<div class="srsdone">复习完了，<b>' + srsQueue.length + ' 个词</b>。' +
+        '往下开始今天的新内容。</div>';
+      return;
+    }
+
+    var item = srsQueue[srsIdx], v = item.v;
+    document.getElementById("srsCount").textContent =
+      (srsIdx + 1) + " / " + srsQueue.length;
+    document.getElementById("srsCard").innerHTML =
+      '<div class="srsface">' +
+        '<div class="srsword">' + esc(v.w) + speakBtn(v.w) + '</div>' +
+        '<div class="srsipa">' + esc(v.ipa) + '</div>' +
+        (srsFlipped ?
+          '<div class="srsback">' +
+            '<div class="srszh">' + esc(v.zh) + '</div>' +
+            '<div class="srsex">' + esc(v.ex) + speakBtn(v.ex) +
+              '<em>' + esc(v.ex_zh) + '</em></div>' +
+          '</div>' : '') +
+      '</div>' +
+      '<div class="srsrow">' +
+        (srsFlipped ?
+          '<button class="btn bad" type="button" data-srs="bad">忘了</button>' +
+          '<button class="btn primary" type="button" data-srs="good">记得</button>' :
+          '<button class="btn" type="button" data-srs="flip">翻开看答案</button>') +
+      '</div>';
+  }
+
+  function srsAnswer(good){
+    var item = srsQueue[srsIdx];
+    var map = srsRead(), t = todayDay();
+    var step = good ? Math.min((item.step || 0) + 1, SRS_STEPS.length - 1) : 0;
+    map[item.v.w] = {step: step, due: t + SRS_STEPS[step]};
+    srsWrite(map);
+    srsIdx++; srsFlipped = false;
+    renderSrs();
+  }
+
+  document.getElementById("srsCard").addEventListener("click", function(e){
+    var b = e.target.closest("[data-srs]");
+    if(b){
+      var a = b.getAttribute("data-srs");
+      if(a === "flip"){ srsFlipped = true; renderSrs(); }
+      else srsAnswer(a === "good");
+      return;
+    }
+    var say = e.target.closest(".speak");
+    if(say) speakText(say.getAttribute("data-say"));
+  });
+
+  document.getElementById("srsSkip").addEventListener("click", function(){
+    srsSkipped = true;
+    document.getElementById("srsMod").hidden = true;
+  });
+
   // ---------- 难度校准 ----------
   // 勾几条就跳到哪一段：内容是固定的 133 天曲线，校准改的是你切入的位置
   var LEVEL_START = {0:1, 1:15, 2:36, 3:71, 4:99, 5:113};
@@ -1280,6 +1680,8 @@ footer{
       });
       var n = li.querySelector(".n");
       if(n && n.textContent){ f.n = n.textContent; any = true; }
+      var sr = li.querySelector(".srs");
+      if(sr && sr.textContent){ f.srs = sr.textContent; any = true; }
       if(any) o[li.getAttribute("data-day")] = f;
     });
     return o;
@@ -1309,6 +1711,8 @@ footer{
       });
       var sp = li.querySelector(".n");
       if(sp && f.n) sp.textContent = f.n;
+      var sr2 = li.querySelector(".srs");
+      if(sr2 && f.srs) sr2.textContent = f.srs;
       n++;
     });
     mirrorLocal();
