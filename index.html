@@ -846,7 +846,7 @@ footer{
   <footer>
     起点 2026-08-19 · 目标 2026-12-31 能用英语做工作交流。<br>
     进度存在本机浏览器里；换设备用上面的「同步到另一台设备」。计划要调整就跟 Claude 说。<br>
-    <span class="mono" style="opacity:.65">内容版本 08-19 15:29 ·
+    <span class="mono" style="opacity:.65">内容版本 08-19 15:38 ·
       看不到最新内容就强制刷新（电脑 Ctrl/Cmd+Shift+R，手机长按刷新键）</span>
   </footer>
 </div>
@@ -1890,12 +1890,19 @@ footer{
       pats ? "Today's sentence patterns she is practising: " + pats +
         ". Give her openings where these fit." : "",
       "DIFFICULTY LEVEL " + chatLevel + ": " + LEVEL_RULE[chatLevel],
-      "HARD RULES:",
-      "- English ONLY. Never write Chinese, even if she writes Chinese. If she uses " +
-        "Chinese, say you don't speak it and ask her to try in English.",
+      "HARD RULES (follow every one, every turn):",
+      "- English ONLY. If she writes even one Chinese word, your ENTIRE reply must be: " +
+        "\"Sorry, I don't speak Chinese. Can you say that in English?\" — nothing else. " +
+        "Do not answer the content of her Chinese message.",
       "- Keep every reply under 60 words. This is a conversation, not a lecture.",
-      "- Never correct her grammar mid-conversation and never praise her English. " +
-        "Just talk like a real colleague would.",
+      "- NEVER open with empty praise. Banned openers: \"Great\", \"Nice\", \"Wow\", " +
+        "\"That's impressive\", \"Interesting\", \"Good job\", \"Awesome\", \"Well done\". " +
+        "A real busy colleague does not applaud sentences. Go straight to your question " +
+        "or your reaction.",
+      "- Never correct her grammar and never comment on her English at all.",
+      "- If she uses a vague quantity word (a lot, many, some, better, worse, big, small, " +
+        "recently, soon), you MUST ask for the specific number, percentage, or date " +
+        "before moving on. Do not let it pass.",
       "- Always end with a question or something she must respond to. Never let the " +
         "conversation die.",
       "- If she goes silent or says very little, ask a smaller, easier question instead " +
@@ -1982,6 +1989,14 @@ footer{
 
   function chatSendText(t){
     t = (t || "").trim(); if(!t) return;
+    // 中文在前端就拦住，不发给 AI。
+    // 光靠提示词管不住（实测小模型看懂中文就直接用英文答了），而"能用中文糊过去"
+    // 会让这块练习失去意义 —— 卡住时硬憋出英文，才是真正在练的东西。
+    if(/[一-鿿]/.test(t)){
+      chatSay("这里只能用英语。憋不出来就先说你会的那半句，或者问它 " +
+              "\"How do you say ... in English?\"", true);
+      return;
+    }
     chatMsgs.push({role:"user", content:t});
     bubble("me", t);
     document.getElementById("chatText").value = "";
