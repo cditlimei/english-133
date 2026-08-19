@@ -1029,7 +1029,7 @@ footer{
   <footer>
     起点 2026-08-19 · 目标 2026-12-31 能用英语做工作交流。<br>
     进度存在本机浏览器里；换设备用上面的「同步到另一台设备」。计划要调整就跟 Claude 说。<br>
-    <span class="mono" style="opacity:.65">内容版本 08-19 16:13 ·
+    <span class="mono" style="opacity:.65">内容版本 08-19 16:26 ·
       看不到最新内容就强制刷新（电脑 Ctrl/Cmd+Shift+R，手机长按刷新键）</span>
   </footer>
 </div>
@@ -2278,14 +2278,26 @@ footer{
   var timers = {study:{run:0, acc:0}, speak:{run:0, acc:0}};
   var tickH = null;
 
+  var timerNote = "";
   function loadTimers(){
     try{
       var o = JSON.parse(localStorage.getItem(TKEY) || "{}");
-      if(o.day === todayDay()){
-        ["study","speak"].forEach(function(k){
-          if(o[k]) timers[k] = {run:o[k].run || 0, acc:o[k].acc || 0};
-        });
-      }
+      if(o.day !== todayDay()) return;          // 跨天了，从零开始
+      ["study","speak"].forEach(function(k){
+        if(!o[k]) return;
+        var run = o[k].run || 0, acc = o[k].acc || 0;
+        if(run){
+          var open = Math.floor((Date.now() - run) / 1000);
+          if(open > 90 * 60){
+            // 关机、合盖、忘了点停止 —— 这段时长不可信，直接丢弃。
+            // 宁可少记也不能虚高：教练反馈全靠这两个数字判断。
+            timerNote = "上次有个计时器忘了停（挂了 " +
+              Math.round(open / 3600) + " 小时），那段没给你算。";
+            run = 0;
+          }
+        }
+        timers[k] = {run:run, acc:acc};
+      });
     }catch(e){}
   }
   function saveTimers(){
@@ -3210,6 +3222,10 @@ footer{
   renderAll();
   loadTimers();
   paintTimers();
+  if(timerNote){
+    var tn = document.querySelector(".thint");
+    if(tn) tn.innerHTML = '<b style="color:var(--hot)">' + timerNote + '</b><br>' + tn.innerHTML;
+  }
 })();
 </script>
 
