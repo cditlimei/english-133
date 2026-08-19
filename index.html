@@ -94,6 +94,15 @@ header{
   background:var(--accent-soft); color:var(--accent-ink);
   padding:5px 11px; border-radius:999px; white-space:nowrap;
 }
+.slack{
+  font-family:var(--f-mono); font-size:13px;
+  padding:5px 11px; border-radius:999px; white-space:nowrap;
+  background:var(--surface-2); color:var(--ink-2);
+}
+.slack[data-s="tight"]{background:#FDF3E3; color:#8A5A11}
+.slack[data-s="behind"]{background:var(--hot-soft); color:var(--hot); font-weight:600}
+:root:not([data-theme="light"]) .slack[data-s="tight"]{background:#33260F; color:#E0AC55}
+:root[data-theme="dark"] .slack[data-s="tight"]{background:#33260F; color:#E0AC55}
 
 /* ---------- day header ---------- */
 .dayhead{padding:34px 0 22px; border-bottom:1px solid var(--line-2)}
@@ -549,7 +558,8 @@ footer{
   <div class="hbar">
     <div class="brand">口语 <span>133</span></div>
     <div class="streak" id="streakChip">连续 0 天</div>
-    <div class="countdown" id="cdChip">距 12-30 还有 — 天</div>
+    <div class="countdown" id="cdChip">距 12-31 还有 — 天</div>
+    <div class="slack" id="slackChip"></div>
   </div>
 </header>
 
@@ -594,7 +604,7 @@ footer{
         <button class="btn ghost" id="btnCalibReset" type="button">回到第 1 天</button>
       </div>
       <p class="calibmsg" id="calibMsg"></p>
-      <p class="calibnote">校准只改<b>你从哪一段内容开始</b>，不改总时长和 12-30 的目标。
+      <p class="calibnote">校准只改<b>你从哪一段内容开始</b>，不改总时长和 12-31 的目标。
         往后学的过程中觉得节奏不对，随时回来重新校准。</p>
     </div>
   </details>
@@ -701,9 +711,9 @@ footer{
   </div>
 
   <footer>
-    起点 2026-08-19 · 目标 2026-12-30 能用英语做工作交流。<br>
+    起点 2026-08-19 · 目标 2026-12-31 能用英语做工作交流。<br>
     进度存在本机浏览器里；换设备用上面的「同步到另一台设备」。计划要调整就跟 Claude 说。<br>
-    <span class="mono" style="opacity:.65">内容版本 08-19 14:56 ·
+    <span class="mono" style="opacity:.65">内容版本 08-19 15:06 ·
       看不到最新内容就强制刷新（电脑 Ctrl/Cmd+Shift+R，手机长按刷新键）</span>
   </footer>
 </div>
@@ -858,7 +868,7 @@ footer{
   var CUR = JSON.parse(document.getElementById("curriculum").textContent);
   var STORE = document.getElementById("store");
   var START = "2026-08-19";
-  var END   = "2026-12-30";
+  var END   = "2026-12-31";
   var TOTAL = CUR.length;
 
   var PHASES = [
@@ -903,10 +913,42 @@ footer{
     mirrorLocal(); flashSaved();
   }
 
-  // 今天该学第几天。
-  // 关键：按「学完了几天」推进，不按日历。出差漏了三天，回来接着上次那天学，
-  // 中间的内容不会被永久跳过。日历只用来算距 12-30 还剩多久。
-  function todayDay(){
+  // ---------- 排期：12-31 是硬截止，不能顺延 ----------
+  // 缓冲来自 19 个复习日：间隔重复模块已经每天自动挑该忘的词，独立复习日的
+  // 功能被它取代了，所以落后时可以牺牲复习日追回来 —— 不靠加量，靠减冗余。
+  function isBuffer(d){
+    var x = CUR[d-1];
+    return !!(x && x.review);
+  }
+  function coreLeft(from){                  // 从第 from 天起还剩几个必做日
+    var n = 0;
+    for(var d = from; d <= TOTAL; d++) if(!isBuffer(d)) n++;
+    return n;
+  }
+  function calLeft(){                       // 到截止日还剩几天（含今天）
+    return dayDiff(todayStr(), END) + 1;
+  }
+  // 两种走法各自的余量：
+  //   slackFull = 照常走（含复习日）还能漏几天
+  //   slackLean = 把剩下所有复习日都让出来之后，还能漏几天（这是真实容错上限）
+  // 状态按 slackLean 判定；是否开始跳复习日按 slackFull 判定 —— 不漏就照常学，
+  // 一旦照常走会超期，才自动开始砍复习日。
+  function pace(){
+    var t = todayDayRaw();
+    var have = calLeft();
+    var allLeft = TOTAL - t + 1;
+    var core = coreLeft(t);
+    var slackFull = have - allLeft;
+    var slackLean = have - core;
+    var state = slackLean >= 10 ? "ok" : (slackLean >= 0 ? "tight" : "behind");
+    return {day:t, have:have, need:core, allLeft:allLeft,
+            slack:slackLean, slackFull:slackFull,
+            lean: slackFull < 0,          // 是否已进入跳复习日模式
+            state:state};
+  }
+
+  // 不含追赶逻辑的原始进度：按「学完了几天」推进，漏天不丢内容
+  function todayDayRaw(){
     var learned = 0;
     for(var d = 1; d <= TOTAL; d++){
       if(modsDone(d) > 0) learned = d;      // 最后一个动过的天
@@ -915,6 +957,15 @@ footer{
     // 今天已经开始学了就停在今天，别往下跳
     if(learned && modsDone(learned) < 4 && !dayFinished(learned)) next = learned;
     return Math.min(Math.max(next + offset(), 1), TOTAL);
+  }
+
+  // 今天该学第几天：照常走会超期时，自动跳过复习日把日程压回 12-31 之内
+  function todayDay(){
+    var d = todayDayRaw();
+    var have = calLeft();
+    if(have - (TOTAL - d + 1) >= 0) return d;       // 照常走来得及，照常走
+    while(d < TOTAL && isBuffer(d)) d++;            // 来不及了，砍复习日
+    return d;
   }
 
   // 一天算不算"收工"：四块全勾，或者勾了开口那块（时间紧时的合法降级）
@@ -1147,7 +1198,18 @@ footer{
 
     var left = dayDiff(todayStr(), END);
     document.getElementById("cdChip").textContent =
-      left > 0 ? "距 12-30 还有 " + left + " 天" : "目标日已到";
+      left > 0 ? "距 12-31 还有 " + left + " 天" : "目标日已到";
+
+    // 排期余量：12-31 是硬截止，这个数字要一直在她眼前
+    var pc = pace(), chip = document.getElementById("slackChip");
+    chip.setAttribute("data-s", pc.state);
+    if(pc.state === "behind"){
+      chip.textContent = "已超期 " + Math.abs(pc.slack) + " 天";
+    }else if(pc.state === "tight"){
+      chip.textContent = "余量仅 " + pc.slack + " 天";
+    }else{
+      chip.textContent = "还能漏 " + pc.slack + " 天";
+    }
   }
 
   function renderLog(){
@@ -1198,6 +1260,7 @@ footer{
   // ---------- 教练反馈：按真实进度给判断 ----------
   function renderCoach(){
     var s = stats();
+    var pc = pace();
     var t = s.today;
     // 欠账只数「一块都没碰」的天：只做了开口那块也是合法的降级完成，不算欠
     var touched = s.doneDays + s.partDays;
@@ -1223,16 +1286,37 @@ footer{
         body.push("明天同一时间同一地点，节奏别断。");
       }
     }
+    else if(pc.state === "behind"){
+      tone = "warn";
+      title = "按现在的速度赶不上 12-31";
+      body.push("剩 <b>" + pc.have + " 天</b>日历，还有 <b>" + pc.need +
+                " 天</b>必做内容 —— 缺口 <b>" + Math.abs(pc.slack) + " 天</b>，" +
+                "复习日已经全部让给你了，光靠跳过缓冲追不回来。");
+      body.push("三条路，选一条<b>现在就定</b>，别拖：<br>" +
+                "① <b>加练</b>：每周挑两天做双份（只加开口和句型那两块，词汇靠复习模块兜）<br>" +
+                "② <b>砍内容</b>：跟我说「精简剩余内容」，我把后面每天压到 30 分钟核心量<br>" +
+                "③ <b>挪目标</b>：把截止日推到 1 月中旬，代价是拖过年就容易散");
+      body.push("我的建议是①。缺口还不大的时候加两天就补回来了，等缺口到 20 天再动手就只能砍内容。");
+    }
+    else if(pc.state === "tight"){
+      tone = "warn";
+      title = "余量只剩 " + pc.slack + " 天了";
+      body.push("为了保住 12-31，<b>复习日已经开始自动跳过</b>——你不会再看到它们，" +
+                "该复习的词照样每天出现在最上面那块。");
+      body.push("从现在起再漏一天就要动真格的（加练或砍内容）。这几天把时段锁死：" +
+                "哪个时间你最不容易被打断，就固定在那儿，别的时段全放弃。");
+    }
     else if(gap >= 5){
       tone = "warn";
-      title = "欠了 " + gap + " 天，别补课";
-      body.push("落下的课<b>不要回头补</b>——补课会让你越补越怕打开这个页面。直接从今天这一天开始，欠的天数当作沉没成本。");
+      title = "漏了 " + gap + " 天，但还追得上";
+      body.push("排期还有 <b>" + pc.slack + " 天</b>余量，不用补课——" +
+                "落下的就让它落下，直接从今天这天开始。<b>补课是放弃的前兆</b>。");
       body.push("真正要解决的是<b>时间没固定</b>。想一想哪个时段是你最不容易被打断的（通勤、午休、睡前），把它锁死，其他时段全部放弃。");
     }
     else if(gap >= 2){
       tone = "warn";
       title = "漏了 " + gap + " 天";
-      body.push("还在可控范围。今天先只做「04 开口练习」这一块——单块完成也算数，比整天空着强得多。");
+      body.push("还在可控范围，排期余量 <b>" + pc.slack + " 天</b>。今天先只做「04 开口练习」这一块——单块完成也算数，比整天空着强得多。");
       body.push("如果连续两天漏在同一个时间段，那不是意志问题，是<b>时段选错了</b>，换一个。");
     }
     else if(todayDone > 0){
