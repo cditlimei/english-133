@@ -343,6 +343,24 @@ header{
 .mins{font-family:var(--f-mono); font-size:12px; color:var(--ink-3)}
 .modbody{padding:18px}
 
+/* 自动完成状态 */
+.autodone{
+  font-family:var(--f-sans); font-size:13px; font-weight:600;
+  color:var(--accent); background:var(--accent-soft);
+  border:1px solid var(--accent); border-radius:999px; padding:6px 13px;
+  white-space:nowrap;
+}
+.autoprog{
+  font-family:var(--f-mono); font-size:12px; color:var(--ink-3);
+  border:1px dashed var(--line); border-radius:999px; padding:6px 11px;
+  white-space:nowrap; cursor:default;
+}
+.mod[data-done="1"] .modhead{background:var(--accent-soft)}
+.mod[data-done="1"] .modnum{border-color:var(--accent); color:var(--accent)}
+@media(max-width:640px){
+  .autoprog{font-size:11px; padding:5px 9px}
+}
+
 /* done toggle */
 .done-btn{
   display:inline-flex; align-items:center; gap:8px;
@@ -828,7 +846,7 @@ footer{
   <footer>
     起点 2026-08-19 · 目标 2026-12-31 能用英语做工作交流。<br>
     进度存在本机浏览器里；换设备用上面的「同步到另一台设备」。计划要调整就跟 Claude 说。<br>
-    <span class="mono" style="opacity:.65">内容版本 08-19 15:18 ·
+    <span class="mono" style="opacity:.65">内容版本 08-19 15:29 ·
       看不到最新内容就强制刷新（电脑 Ctrl/Cmd+Shift+R，手机长按刷新键）</span>
   </footer>
 </div>
@@ -1107,6 +1125,8 @@ footer{
                 l:li.getAttribute("data-l"), s:li.getAttribute("data-s"),
                 m:li.getAttribute("data-m"), k:li.getAttribute("data-k"),
                 r:li.getAttribute("data-r"),
+                tv:li.getAttribute("data-tv"), tp:li.getAttribute("data-tp"),
+                ts:li.getAttribute("data-ts"), tc:li.getAttribute("data-tc"),
                 offset:li.getAttribute("data-offset"),
                 srs:(li.querySelector(".srs")||{}).textContent || "",
                 n:(li.querySelector(".n")||{}).textContent || ""};
@@ -1123,7 +1143,7 @@ footer{
       var o = JSON.parse(raw);
       Object.keys(o).forEach(function(d){
         var li = rec(d); if(!li) return; var s = o[d];
-        ["v","p","l","s","m","k","r","offset"].forEach(function(f){
+        ["v","p","l","s","m","k","r","offset","tv","tp","ts","tc"].forEach(function(f){
           if(s[f]) li.setAttribute("data-"+f, s[f]);
         });
         var n = li.querySelector(".n"); if(n && s.n) n.textContent = s.n;
@@ -1152,6 +1172,81 @@ footer{
     var s = r.querySelector(".n"); if(!s) return;
     s.textContent = text;
     mirrorLocal(); flashSaved();
+  }
+
+  // ---------- 自动判定完成 ----------
+  // 不靠她点「我做完了」，靠她实际碰了什么：
+  //   词汇/句型 = 听或跟读覆盖了多少条（去重，同一条点十次只算一条）
+  //   开口     = 开口计时分钟 + 跟读次数 + AI 对练轮数
+  //   听力     = 页面看不到她在 B 站听没听，只能她自己说一声
+  // 记在每天的 data-tv / data-tp / data-ts 上（碰过的序号，逗号分隔）。
+  function touched(day, kind){
+    var v = getA(day, "t" + kind);
+    return v ? v.split(",").filter(Boolean) : [];
+  }
+  function addTouch(day, kind, idx){
+    var list = touched(day, kind);
+    if(list.indexOf(String(idx)) >= 0) return false;   // 同一条不重复计
+    list.push(String(idx));
+    var r = rec(day); if(!r) return false;
+    r.setAttribute("data-t" + kind, list.join(","));
+    mirrorLocal();
+    return true;
+  }
+  // AI 对练轮数单独记（不是按条目去重）
+  function chatRounds(day){ return parseInt(getA(day, "tc") || "0", 10) || 0; }
+  function addChatRound(day){
+    var r = rec(day); if(!r) return;
+    r.setAttribute("data-tc", String(chatRounds(day) + 1));
+    mirrorLocal();
+  }
+
+  // 每块的完成门槛与当前进度
+  function progressOf(day, key){
+    var d = CUR[day-1] || {};
+    if(key === "v"){
+      var total = (d.vocab || []).length;
+      if(!total) return {done:true, cur:0, need:0, text:"复习日无新词"};
+      var need = Math.max(1, Math.ceil(total * 0.6));
+      var cur = touched(day, "v").length;
+      return {done: cur >= need, cur:cur, need:need,
+              text: cur + " / " + need + " 个词已听读"};
+    }
+    if(key === "p"){
+      var tp = (d.patterns || []).length;
+      if(!tp) return {done:true, cur:0, need:0, text:""};
+      var np = Math.max(1, Math.round(tp * 0.6));
+      var cp = touched(day, "p").length;
+      return {done: cp >= np, cur:cp, need:np,
+              text: cp + " / " + np + " 句已听读"};
+    }
+    if(key === "s"){
+      var mins = parseInt(getA(day, "k") || "0", 10) || 0;
+      var sh = touched(day, "s").length;
+      var ch = chatRounds(day);
+      // 三条路任一达标就算练了：开口计时 10 分钟 / 跟读 3 次 / 对练 5 轮
+      var done = mins >= 10 || sh >= 3 || ch >= 5;
+      var parts = [];
+      if(mins) parts.push("开口 " + mins + " 分钟");
+      if(sh) parts.push("跟读 " + sh + " 次");
+      if(ch) parts.push("对练 " + ch + " 轮");
+      return {done:done, cur:0, need:0,
+              text: parts.length ? parts.join(" · ") :
+                    "开口 10 分钟 / 跟读 3 次 / 对练 5 轮，任一即可"};
+    }
+    return {done: getA(day, key) === "1", cur:0, need:0, text:""};
+  }
+
+  // 把自动判定结果写进存档（写操作发生在她的点击回调里，所以会被保存）
+  function syncAuto(day){
+    ["v","p","s"].forEach(function(k){
+      var pr = progressOf(day, k);
+      var was = getA(day, k) === "1";
+      if(pr.done && !was){
+        var r = rec(day);
+        if(r){ r.setAttribute("data-" + k, "1"); mirrorLocal(); flashSaved(); }
+      }
+    });
   }
 
   // ---------- 统计 ----------
@@ -1208,9 +1303,32 @@ footer{
     return segs.length ? segs.sort(function(a,b){ return b.length - a.length; })[0].trim() : "";
   }
 
-  function speakBtn(text){
+  function speakBtn(text, kind, idx){
     return '<button class="speak" type="button" data-say="'+esc(text)+'" ' +
+           (kind ? 'data-kind="'+kind+'" data-idx="'+idx+'" ' : '') +
            'aria-label="朗读">🔊</button>';
+  }
+
+  // 只更新模块头上的进度徽标，不重绘模块内容
+  function refreshBadges(){
+    var mods = document.querySelectorAll("#modules .mod");
+    MODS.forEach(function(m, i){
+      var sec = mods[i]; if(!sec) return;
+      var on = getA(view, m.key) === "1";
+      var pr = progressOf(view, m.key);
+      if(on) sec.setAttribute("data-done", "1"); else sec.removeAttribute("data-done");
+      var head = sec.querySelector(".modhead");
+      var badge = head.querySelector(".autodone, .autoprog, .done-btn");
+      if(!badge) return;
+      if(on && !badge.classList.contains("autodone")){
+        var span = document.createElement("span");
+        span.className = "autodone";
+        span.textContent = "✓ 已完成";
+        badge.replaceWith(span);
+      }else if(!on && badge.classList.contains("autoprog")){
+        badge.textContent = pr.text;
+      }
+    });
   }
 
   function renderModules(){
@@ -1225,24 +1343,24 @@ footer{
           body = '<p style="color:var(--ink-2);margin:0">复习日不学新词 —— 把本周的词过一遍，' +
                  '说不出中文意思的挑出来重点记。</p>';
         }else{
-          body = '<div class="vocab">' + d.vocab.map(function(v){
+          body = '<div class="vocab">' + d.vocab.map(function(v, vi){
             return '<div class="vrow">' +
-              '<div><span class="vw">'+esc(v.w)+'</span>'+speakBtn(v.w)+
+              '<div><span class="vw">'+esc(v.w)+'</span>'+speakBtn(v.w,"v",vi)+
                 '<span class="vipa">'+esc(v.ipa)+'</span></div>' +
               '<div class="vzh">'+esc(v.zh)+'</div>' +
-              '<div class="vex">'+esc(v.ex)+speakBtn(v.ex)+
-                '<em>'+esc(v.ex_zh)+'</em>'+shadowBar(v.ex)+'</div>' +
+              '<div class="vex">'+esc(v.ex)+speakBtn(v.ex,"v",vi)+
+                '<em>'+esc(v.ex_zh)+'</em>'+shadowBar(v.ex,"v",vi)+'</div>' +
             '</div>';
           }).join("") + '</div>';
         }
       }
       else if(m.key === "p"){
-        body = (d.patterns||[]).map(function(p){
+        body = (d.patterns||[]).map(function(p, pi){
           return '<div class="pat">' +
-            '<div class="pen">'+esc(p.en)+speakBtn(p.en)+'</div>' +
+            '<div class="pen">'+esc(p.en)+speakBtn(p.en,"p",pi)+'</div>' +
             '<div class="pzh">'+esc(p.zh)+'</div>' +
-            (p.ex ? '<div class="pex">'+esc(p.ex)+speakBtn(p.ex)+
-                    '<em>'+esc(p.ex_zh)+'</em>'+shadowBar(p.ex)+'</div>' : '') +
+            (p.ex ? '<div class="pex">'+esc(p.ex)+speakBtn(p.ex,"p",pi)+
+                    '<em>'+esc(p.ex_zh)+'</em>'+shadowBar(p.ex,"p",pi)+'</div>' : '') +
           '</div>';
         }).join("");
       }
@@ -1269,27 +1387,39 @@ footer{
             '</div>' : '') +
           (S.prompts && S.prompts.length ?
             '<div class="field"><div class="flabel">提示问题</div><ol class="prompts">' +
-            S.prompts.map(function(q){
-              return '<li>'+esc(q)+speakBtn(q)+'</li>';
+            S.prompts.map(function(q, qi){
+              return '<li>'+esc(q)+speakBtn(q,"s",qi+1)+'</li>';
             }).join("") + '</ol></div>' : '') +
           (S.model ?
             '<details class="model-wrap"><summary>说完再看参考答案</summary>' +
             '<div class="model">'+esc(S.model)+speakBtn(S.model)+
             '<div class="zh">'+esc(S.model_zh)+'</div>'+
-            shadowBar(S.model.split(/(?<=[.!?])\s+/)[0] || S.model)+
+            shadowBar(S.model.split(/(?<=[.!?])\s+/)[0] || S.model, "s", 0)+
             '</div></details>' : '');
       }
 
       var on = getA(view, m.key) === "1" ? "1" : "0";
+      var pr = progressOf(view, m.key);
+      // 听力这块页面观测不到（她在 B 站听），只能她自己说一声；其余全自动
+      var manual = (m.key === "l");
+      var badge;
+      if(on === "1"){
+        badge = '<span class="autodone">✓ 已完成</span>';
+      }else if(manual){
+        badge = '<button class="done-btn" type="button" data-mod="l" data-on="0">' +
+                  '<span class="tick">✓</span><span class="lbl">听完了</span>' +
+                '</button>';
+      }else{
+        badge = '<span class="autoprog" title="做了就自动算完成，不用手动打钩">' +
+                  esc(pr.text) + '</span>';
+      }
       html +=
-        '<section class="mod">' +
+        '<section class="mod"' + (on === "1" ? ' data-done="1"' : '') + '>' +
           '<div class="modhead">' +
             '<span class="modnum mono">'+m.num+'</span>' +
             '<h2>'+m.title+'</h2>' +
             '<span class="mins">'+m.mins+'</span>' +
-            '<button class="done-btn" type="button" data-mod="'+m.key+'" data-on="'+on+'">' +
-              '<span class="tick">✓</span><span class="lbl">'+(on==="1"?"已完成":"标记完成")+'</span>' +
-            '</button>' +
+            badge +
           '</div>' +
           '<div class="modbody">'+body+'</div>' +
         '</section>';
@@ -1520,6 +1650,20 @@ footer{
       renderStats(); renderMap(); renderCoach();
       return;
     }
+    // 记账：她点了哪个模块的哪一条，达标就自动点亮，不用手动打钩
+    var actor = e.target.closest("[data-kind]");
+    if(actor){
+      var kind = actor.getAttribute("data-kind");
+      var idx = actor.getAttribute("data-idx");
+      // 跟读比单纯朗读更实在，用独立编号计数，两者都算接触过这一条
+      var key = actor.classList.contains("mic") ? "r" + idx : idx;
+      if(addTouch(view, kind, key)){
+        syncAuto(view);
+        renderStats(); renderMap(); renderCoach();
+        // 只重画模块头的进度，别整块重绘（会打断她正在录的音）
+        refreshBadges();
+      }
+    }
     var cp = e.target.closest("#btnCopyAi");
     if(cp){
       var txt = document.getElementById("aiText").textContent;
@@ -1558,11 +1702,13 @@ footer{
 
   document.getElementById("inMin").addEventListener("change", function(){
     setA(view, "m", this.value ? String(Math.max(0, parseInt(this.value,10)||0)) : "");
-    renderStats(); renderCoach();
+    syncAuto(view); refreshBadges();
+    renderStats(); renderMap(); renderCoach();
   });
   document.getElementById("inSpeak").addEventListener("change", function(){
     setA(view, "k", this.value ? String(Math.max(0, parseInt(this.value,10)||0)) : "");
-    renderStats(); renderCoach();
+    syncAuto(view); refreshBadges();
+    renderStats(); renderMap(); renderCoach();
   });
   document.getElementById("inNote").addEventListener("change", function(){
     setNote(view, this.value);
@@ -1659,7 +1805,8 @@ footer{
       var field = k === "study" ? "m" : "k";
       setA(view, field, String(mins));
       document.getElementById(k === "study" ? "inMin" : "inSpeak").value = mins;
-      renderStats(); renderCoach();
+      syncAuto(view); refreshBadges();
+      renderStats(); renderMap(); renderCoach();
     }else{
       // 开口也算学习时间，点开口自动把学习计时一起带起来
       t.run = Date.now();
@@ -1816,6 +1963,9 @@ footer{
       if(!reply){ chatSay("没收到回复，再试一次", true); return; }
       chatMsgs.push({role:"assistant", content:reply});
       bubble("ai", reply);
+      addChatRound(view);                       // 对练轮数计入开口练习
+      syncAuto(view); refreshBadges();
+      renderStats(); renderMap(); renderCoach();
       document.getElementById("chatTurns").textContent =
         Math.floor(chatMsgs.length / 2) + " 轮";
       if(document.getElementById("chatAuto").checked) speakText(reply);
@@ -2085,10 +2235,11 @@ footer{
   }
 
   // 给一段文本挂上跟读条
-  function shadowBar(text){
+  function shadowBar(text, kind, idx){
     var label = SR ? "跟读打分" : "录音跟读";
     return '<div class="shadow-bar">' +
-      '<button class="mic" type="button" data-shadow="' + esc(text) + '" data-rec="0">' +
+      '<button class="mic" type="button" data-shadow="' + esc(text) + '" data-rec="0"' +
+        (kind ? ' data-kind="'+kind+'" data-idx="'+idx+'"' : '') + '>' +
         '<span>🎤</span><span class="mlbl">' + label + '</span>' +
       '</button>' +
       '<span class="shadow-msg"></span>' +
@@ -2308,7 +2459,7 @@ footer{
     var o = {};
     Array.prototype.forEach.call(STORE.children, function(li){
       var f = {}, any = false;
-      ["v","p","l","s","m","k","r","offset"].forEach(function(x){
+      ["v","p","l","s","m","k","r","offset","tv","tp","ts","tc"].forEach(function(x){
         var val = li.getAttribute("data-"+x);
         if(val){ f[x] = val; any = true; }
       });
@@ -2340,7 +2491,7 @@ footer{
     Object.keys(o).forEach(function(day){
       var li = rec(day); if(!li) return;
       var f = o[day] || {};
-      ["v","p","l","s","m","k","r","offset"].forEach(function(x){
+      ["v","p","l","s","m","k","r","offset","tv","tp","ts","tc"].forEach(function(x){
         if(f[x]) li.setAttribute("data-"+x, f[x]);
       });
       var sp = li.querySelector(".n");
