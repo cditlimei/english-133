@@ -209,6 +209,11 @@ header{
 }
 
 /* ---------- AI 陪练 ---------- */
+.chatskiprow{
+  display:flex; gap:11px; align-items:center; flex-wrap:wrap;
+  padding-bottom:14px; margin-bottom:14px; border-bottom:1px solid var(--line-2);
+}
+.skiphint{font-size:13px; color:var(--ink-3)}
 .setup p{margin:0 0 12px; color:var(--ink-2); font-size:15.5px}
 .setup p b{color:var(--ink)}
 .setnote{font-size:13.5px!important; color:var(--ink-3)!important}
@@ -295,7 +300,8 @@ header{
 /* ---------- 计时器 ---------- */
 .timers{
   display:grid; grid-template-columns:1fr 1fr; gap:11px;
-  padding-bottom:16px; margin-bottom:16px; border-bottom:1px solid var(--line-2);
+  margin-top:14px; padding:15px; border-radius:14px;
+  background:var(--surface); border:1px solid var(--line); box-shadow:var(--shadow);
 }
 .tmr{
   display:flex; align-items:center; gap:11px;
@@ -412,8 +418,66 @@ header{
 }
 .calibnote{font-size:13.5px!important; color:var(--ink-3)!important; margin-top:12px!important}
 
+/* ---------- 步骤条 ---------- */
+.stepbar{
+  display:flex; gap:6px; margin-top:18px; padding:4px 0;
+  overflow-x:auto; scrollbar-width:none;
+}
+.stepbar::-webkit-scrollbar{display:none}
+.stepdot{
+  flex:none; display:flex; align-items:center; gap:6px;
+  border:1px solid var(--line); background:var(--surface); color:var(--ink-3);
+  border-radius:999px; padding:6px 12px 6px 8px; cursor:pointer;
+  font-family:var(--f-sans); font-size:13px; line-height:1;
+}
+.stepdot .sdn{
+  width:19px; height:19px; border-radius:50%; display:grid; place-items:center;
+  background:var(--surface-2); font-size:11px; font-weight:700; color:var(--ink-3);
+  font-family:var(--f-mono);
+}
+.stepdot[data-st="done"]{border-color:var(--accent); color:var(--accent)}
+.stepdot[data-st="done"] .sdn{background:var(--accent); color:#fff}
+.stepdot[data-st="cur"]{
+  border-color:var(--ink); background:var(--ink); color:var(--bg); font-weight:600;
+}
+.stepdot[data-st="cur"] .sdn{background:var(--bg); color:var(--ink)}
+.stepdot:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+/* ---------- 步骤卡片的三种状态 ---------- */
+.mod[data-state] .modhead{cursor:pointer}
+.mod[data-state="current"] .modhead{cursor:default}
+/* 未解锁的也允许手动点开预览 —— 她可能想先看看今天开口要说什么 */
+.mod[data-state="locked"]:not([data-open="1"]) .modbody,
+.mod[data-state="done"]:not([data-open="1"]) .modbody{display:none}
+.mod[data-state="locked"][data-open="1"]{opacity:1}
+.mod[data-state="locked"]{opacity:.5}
+.mod[data-state="locked"] .modhead{background:var(--surface)}
+.mod[data-state="done"] .modhead{background:var(--accent-soft)}
+.mod[data-state="current"]{
+  border-color:var(--ink); border-width:2px;
+  box-shadow:0 2px 4px rgba(21,48,43,.06), 0 14px 34px -14px rgba(21,48,43,.28);
+}
+:root:not([data-theme="light"]) .mod[data-state="current"]{
+  box-shadow:0 2px 4px rgba(0,0,0,.4), 0 14px 34px -14px rgba(0,0,0,.7)}
+:root[data-theme="dark"] .mod[data-state="current"]{
+  box-shadow:0 2px 4px rgba(0,0,0,.4), 0 14px 34px -14px rgba(0,0,0,.7)}
+.stepflag{
+  font-family:var(--f-mono); font-size:10.5px; letter-spacing:.08em;
+  color:var(--ink-3); border:1px solid var(--line); border-radius:999px;
+  padding:3px 8px; white-space:nowrap;
+}
+.mod[data-state="done"] .stepflag{border-color:var(--accent); color:var(--accent)}
+.mod[data-state="current"] .stepflag{border-color:var(--ink); color:var(--ink)}
+@media(max-width:640px){
+  .stepdot .sdt{display:none}          /* 手机上只留序号，省横向空间 */
+  .stepdot{padding:7px 9px}
+  .stepflag{display:none}
+}
+
 /* ---------- module ---------- */
 .mod{
+  /* 顶栏 sticky 会盖住滚动到顶部的卡片头，留出余量，否则头里的按钮点不到 */
+  scroll-margin-top:76px;
   background:var(--surface); border:1px solid var(--line);
   border-radius:14px; margin-top:18px; overflow:hidden; box-shadow:var(--shadow);
 }
@@ -712,6 +776,20 @@ details.model-wrap[open] summary::before{content:"▾ "}
 }
 .saved[data-on="1"]{opacity:1}
 
+/* 辅助区折叠 */
+.extras{
+  margin-top:26px; border-top:1px solid var(--line-2); padding-top:8px;
+}
+.extras summary{
+  cursor:pointer; list-style:none; padding:14px 2px;
+  font-family:var(--f-sans); font-size:14.5px; color:var(--ink-2);
+}
+.extras summary::-webkit-details-marker{display:none}
+.extras summary::before{content:"▸ "; color:var(--ink-3)}
+.extras[open] summary::before{content:"▾ "}
+.extras summary b{color:var(--ink)}
+.extrabody{padding-bottom:10px}
+
 /* 设备自检 */
 .selfcheck{
   margin-top:12px; background:var(--surface); border:1px solid var(--line);
@@ -764,6 +842,7 @@ footer{
 
 /* ---------- 手机优先：主要使用场景就是手机 ---------- */
 @media(max-width:640px){
+  .mod{scroll-margin-top:96px}      /* 手机顶栏会换行占两排，余量要更大 */
   body{font-size:16.5px}
   .wrap{padding:0 15px 90px}
   .hbar{padding:10px 15px; gap:8px}
@@ -880,7 +959,7 @@ footer{
   </details>
 
   <!-- 复习：按遗忘曲线从学过的词里挑，排在新内容之前 -->
-  <section class="mod" id="srsMod" hidden>
+  <section class="mod" id="srsMod" data-step="0" hidden>
     <div class="modhead">
       <span class="modnum mono">00</span>
       <h2>先复习</h2>
@@ -897,10 +976,30 @@ footer{
     </div>
   </section>
 
+  <!-- 步骤条：一眼看到今天走到哪一步 -->
+  <div class="stepbar" id="stepBar"></div>
+
+  <!-- 计时器常驻：跨步骤使用（学习计时贯穿全程，开口计时在开口那步用），
+       不能锁在某一步里 —— 否则练开口时看不见它 -->
+  <div class="timers">
+    <div class="tmr" id="tmrStudy">
+      <div class="tlab">学习</div>
+      <div class="tval mono" id="tvStudy">00:00</div>
+      <button class="btn" type="button" data-t="study">开始</button>
+    </div>
+    <div class="tmr" id="tmrSpeak">
+      <div class="tlab">开口</div>
+      <div class="tval mono" id="tvSpeak">00:00</div>
+      <button class="btn" type="button" data-t="speak">开始</button>
+    </div>
+    <p class="thint">开始学就点「学习」；<b>练开口时一定点「开口」</b> ——
+      开口分钟数是这个计划唯一的北极星，它准不准直接决定给你的反馈准不准。</p>
+  </div>
+
   <div id="modules"></div>
 
   <!-- ============ AI 陪练 ============ -->
-  <section class="mod" id="chatMod">
+  <section class="mod" id="chatMod" data-step="5">
     <div class="modhead">
       <span class="modnum mono">05</span>
       <h2>找 AI 对练</h2>
@@ -910,6 +1009,12 @@ footer{
       </button>
     </div>
     <div class="modbody">
+      <!-- 跳过入口放在最外层：填不填密钥都能跳，否则流程会卡在这一步 -->
+      <div class="chatskiprow">
+        <button class="btn ghost" type="button" id="chatSkip">今天不练这个，跳过</button>
+        <span class="skiphint">跟家人真人对话比 AI 强，AI 只是替补</span>
+      </div>
+
       <!-- 首次使用：填一次 key -->
       <div id="chatSetup" class="setup">
         <p><b>它会扮演你的外国同事，只说英语</b>，按今天的主题跟你聊，
@@ -953,23 +1058,14 @@ footer{
     </div>
   </section>
 
-  <!-- ============ 打卡 ============ -->
-  <div class="logbar">
-    <!-- 计时器：手填的数字大概率不准，让它自己记 -->
-    <div class="timers">
-      <div class="tmr" id="tmrStudy">
-        <div class="tlab">学习</div>
-        <div class="tval mono" id="tvStudy">00:00</div>
-        <button class="btn" type="button" data-t="study">开始</button>
-      </div>
-      <div class="tmr" id="tmrSpeak">
-        <div class="tlab">开口</div>
-        <div class="tval mono" id="tvSpeak">00:00</div>
-        <button class="btn" type="button" data-t="speak">开始</button>
-      </div>
-      <p class="thint">练开口时点第二个 —— <b>开口分钟数是这个计划唯一的北极星</b>，
-        它准不准直接决定教练反馈准不准。停止时自动记进下面。</p>
+  <!-- ============ 记录今天 ============ -->
+  <section class="mod" id="logMod" data-step="6">
+    <div class="modhead">
+      <span class="modnum mono">06</span>
+      <h2>记录今天</h2>
+      <span class="mins" id="logState"></span>
     </div>
+    <div class="modbody logbar">
     <div class="logrow">
       <div class="ifield">
         <label for="inMin">学习分钟</label>
@@ -992,7 +1088,13 @@ footer{
         <input id="inNote" type="text" maxlength="200" placeholder="今天说不出来的那句话，记下来">
       </div>
     </div>
-  </div>
+    </div>
+  </section>
+
+  <!-- ============ 以下是辅助区，默认收起，不打扰当天的流程 ============ -->
+  <details class="extras" id="extras">
+    <summary><b>我的记录</b>：卡壳本 · 进度 · 133 天全图 · 设备自检 · 备份</summary>
+    <div class="extrabody">
 
   <!-- ============ 卡壳本 ============ -->
   <section class="mod" id="stuckMod">
@@ -1060,10 +1162,13 @@ footer{
       placeholder="点「导出进度」后这里会出现一串文本，复制存好；导入时把它粘回来再点「导入进度」"></textarea>
   </div>
 
+    </div>
+  </details>
+
   <footer>
     起点 2026-08-19 · 目标 2026-12-31 能用英语做工作交流。<br>
     进度存在本机浏览器里；换设备用上面的「同步到另一台设备」。计划要调整就跟 Claude 说。<br>
-    <span class="mono" style="opacity:.65">内容版本 08-19 16:29 ·
+    <span class="mono" style="opacity:.65">内容版本 08-19 17:12 ·
       看不到最新内容就强制刷新（电脑 Ctrl/Cmd+Shift+R，手机长按刷新键）</span>
   </footer>
 </div>
@@ -1705,7 +1810,8 @@ footer{
                   esc(pr.text) + '</span>';
       }
       html +=
-        '<section class="mod"' + (on === "1" ? ' data-done="1"' : '') + '>' +
+        '<section class="mod" data-step="' + (MODS.indexOf(m) + 1) + '"' +
+          (on === "1" ? ' data-done="1"' : '') + '>' +
           '<div class="modhead">' +
             '<span class="modnum mono">'+m.num+'</span>' +
             '<h2>'+m.title+'</h2>' +
@@ -1749,6 +1855,8 @@ footer{
   }
 
   function renderLog(){
+    var ls = document.getElementById("logState");
+    if(ls) ls.textContent = getA(view,"r") ? "已记录" : "";
     document.getElementById("inMin").value = getA(view,"m") || "";
     document.getElementById("inSpeak").value = getA(view,"k") || "";
     document.getElementById("inNote").value = getNote(view);
@@ -2106,6 +2214,7 @@ footer{
     var fn = document.getElementById("famStuckN");
     if(fn) fn.textContent = famStuck(view);
     renderStats(); renderMap(); renderCoach();
+    applyFlow(false);
   }
 
   // ---------- 交互 ----------
@@ -2124,9 +2233,12 @@ footer{
     if(btn){
       var on = btn.getAttribute("data-on") === "1" ? "0" : "1";
       btn.setAttribute("data-on", on);
-      btn.querySelector(".lbl").textContent = on === "1" ? "已完成" : "标记完成";
+      var lb = btn.querySelector(".lbl");
+      if(lb) lb.textContent = on === "1" ? "已完成" : "听完了";
       setA(view, btn.getAttribute("data-mod"), on === "1" ? "1" : "");
       renderStats(); renderMap(); renderCoach();
+      manualOpen = null;
+      renderModules(); applyFlow(true);
       return;
     }
     // 记账：她点了哪个模块的哪一条，达标就自动点亮，不用手动打钩
@@ -2137,10 +2249,18 @@ footer{
       // 跟读比单纯朗读更实在，用独立编号计数，两者都算接触过这一条
       var key = actor.classList.contains("mic") ? "r" + idx : idx;
       if(addTouch(view, kind, key)){
+        var beforeStep = currentStep();
         syncAuto(view);
         renderStats(); renderMap(); renderCoach();
         // 只重画模块头的进度，别整块重绘（会打断她正在录的音）
         refreshBadges();
+        var afterStep = currentStep();
+        if(afterStep !== beforeStep){
+          manualOpen = null;
+          applyFlow(true);          // 这一步做完了，收起来、展开下一步、滚过去
+        }else{
+          applyFlow(false);
+        }
       }
     }
     var cp = e.target.closest("#btnCopyAi");
@@ -2179,6 +2299,10 @@ footer{
     });
     if(!already){ b.setAttribute("data-on","1"); setA(view,"r",v); }
     else { setA(view,"r",""); }
+    var ls = document.getElementById("logState");
+    if(ls) ls.textContent = getA(view,"r") ? "已记录" : "";
+    applyFlow(false);
+    renderCoach();
   });
 
   document.getElementById("inMin").addEventListener("change", function(){
@@ -2374,6 +2498,7 @@ footer{
       document.getElementById(k === "study" ? "inMin" : "inSpeak").value = mins;
       syncAuto(view); refreshBadges();
       renderStats(); renderMap(); renderCoach();
+      manualOpen = null; applyFlow(false);
     }else{
       // 开口也算学习时间，点开口自动把学习计时一起带起来
       t.run = Date.now();
@@ -2661,6 +2786,13 @@ footer{
     }).catch(function(e){
       box.innerHTML = '<div class="revlab">复盘失败：' + esc(String(e.message||e).slice(0,80)) + '</div>';
     });
+  });
+
+  document.getElementById("chatSkip").addEventListener("click", function(){
+    chatSkipped = true;
+    manualOpen = null;
+    applyFlow(true);
+    chatSay("跳过了。跟家人真人对话本来就比 AI 强，AI 只是替补。");
   });
 
   document.getElementById("chatClear").addEventListener("click", function(){
@@ -3052,7 +3184,8 @@ footer{
 
   document.getElementById("srsSkip").addEventListener("click", function(){
     srsSkipped = true;
-    document.getElementById("srsMod").hidden = true;
+    manualOpen = null;
+    applyFlow(true);            // 跳过就直接进下一步，别把这块留在那儿占地方
   });
 
   // ---------- 难度校准 ----------
@@ -3114,6 +3247,121 @@ footer{
     if(hard >= 3 && t > 8) return {dir:"down", n:hard};
     return null;
   }
+
+  // ---------- 步骤流：一屏只做一件事 ----------
+  // 原来一页把六块全摊开，手机上要滑几千像素，像文档不像 App。
+  // 改成走流程：当前步骤展开，做完自动收起并展开下一步；已完成的点一下能回看。
+  var STEPS = [
+    {n:0, id:"srsMod",  title:"先复习"},
+    {n:1, id:null,      title:"词汇",   key:"v"},
+    {n:2, id:null,      title:"句型",   key:"p"},
+    {n:3, id:null,      title:"听力",   key:"l"},
+    {n:4, id:null,      title:"开口",   key:"s"},
+    {n:5, id:"chatMod", title:"对练",   optional:true},
+    {n:6, id:"logMod",  title:"记录"}
+  ];
+  var manualOpen = null;      // 她手动点开回看的那一步
+
+  function stepEl(s){
+    if(s.id) return document.getElementById(s.id);
+    // 内容四块是动态生成的，按 data-step 找
+    return document.querySelector('#modules .mod[data-step="' + s.n + '"]');
+  }
+  function stepDone(s){
+    if(s.n === 0){
+      // 复习：没到期的词，或者答完了、跳过了，都算过
+      return srsSkipped || !srsQueue.length || srsIdx >= srsQueue.length;
+    }
+    if(s.n === 5) return chatRounds(view) > 0 || chatSkipped;
+    if(s.n === 6) return !!getA(view, "r");     // 选了「今天感觉」才算记录完
+    return getA(view, s.key) === "1";
+  }
+  var chatSkipped = false;
+
+  function activeSteps(){
+    return STEPS.filter(function(s){
+      if(s.n === 0){
+        var el = document.getElementById("srsMod");
+        return el && !el.hidden;                // 没复习内容就不占一步
+      }
+      return true;
+    });
+  }
+
+  function currentStep(){
+    var list = activeSteps();
+    for(var i = 0; i < list.length; i++){
+      if(!stepDone(list[i])) return list[i].n;
+    }
+    return list.length ? list[list.length-1].n : 1;
+  }
+
+  function renderStepBar(){
+    var list = activeSteps(), cur = currentStep();
+    document.getElementById("stepBar").innerHTML = list.map(function(s){
+      var st = stepDone(s) ? "done" : (s.n === cur ? "cur" : "todo");
+      return '<button class="stepdot" type="button" data-goto="' + s.n + '" ' +
+        'data-st="' + st + '" title="' + esc(s.title) + '">' +
+        '<span class="sdn">' + (st === "done" ? "✓" : (s.n === 0 ? "★" : s.n)) + '</span>' +
+        '<span class="sdt">' + esc(s.title) + '</span>' +
+      '</button>';
+    }).join("");
+  }
+
+  function applyFlow(scrollTo){
+    var list = activeSteps(), cur = currentStep();
+    list.forEach(function(s){
+      var el = stepEl(s); if(!el) return;
+      var done = stepDone(s);
+      var state = done ? "done" : (s.n === cur ? "current" : "locked");
+      el.setAttribute("data-state", state);
+      if(manualOpen === s.n) el.setAttribute("data-open", "1");
+      else el.removeAttribute("data-open");
+      // 折叠时头部要能看出这步干了什么
+      var head = el.querySelector(".modhead");
+      if(head && !head.querySelector(".stepflag")){
+        var f = document.createElement("span");
+        f.className = "stepflag";
+        head.appendChild(f);
+      }
+      var flag = head && head.querySelector(".stepflag");
+      if(flag){
+        flag.textContent = done ? "已完成" :
+          (state === "current" ? "现在做这个" : "还没到");
+      }
+    });
+    renderStepBar();
+    if(scrollTo){
+      var el = stepEl(list.filter(function(s){ return s.n === cur; })[0] || list[0]);
+      // 瞬间定位，不用 smooth —— 平滑滚动期间点按钮会点空
+      if(el) el.scrollIntoView({block:"start", behavior:"auto"});
+    }
+  }
+
+  // 点步骤条跳转 / 点已完成的头部回看
+  document.getElementById("stepBar").addEventListener("click", function(e){
+    var b = e.target.closest("[data-goto]"); if(!b) return;
+    var n = parseInt(b.getAttribute("data-goto"), 10);
+    manualOpen = (manualOpen === n) ? null : n;
+    applyFlow(false);
+    var s = STEPS.filter(function(x){ return x.n === n; })[0];
+    var el = s && stepEl(s);
+    if(el) el.scrollIntoView({block:"start", behavior:"auto"});
+  });
+
+  document.addEventListener("click", function(e){
+    var head = e.target.closest(".mod[data-state] .modhead");
+    if(!head) return;
+    // 头部里的按钮各管各的，别误触折叠
+    if(e.target.closest("button:not(.modhead)") && !e.target.closest(".stepflag")) {
+      if(e.target.closest(".done-btn, .autodone, .autoprog, #chatSetupBtn")) return;
+    }
+    var sec = head.closest(".mod[data-state]");
+    var n = parseInt(sec.getAttribute("data-step"), 10);
+    if(sec.getAttribute("data-state") === "current") return;   // 当前步不用折叠
+    manualOpen = (manualOpen === n) ? null : n;
+    applyFlow(false);
+  });
 
   // ---------- 设备自检 ----------
   // 手机上功能可用性差异很大（尤其 iOS 加到主屏幕后），让她自己两秒查清楚，
