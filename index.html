@@ -712,6 +712,28 @@ details.model-wrap[open] summary::before{content:"▾ "}
 }
 .saved[data-on="1"]{opacity:1}
 
+/* 设备自检 */
+.selfcheck{
+  margin-top:12px; background:var(--surface); border:1px solid var(--line);
+  border-radius:14px; padding:18px; box-shadow:var(--shadow);
+}
+.selfcheck p{margin:0 0 13px; color:var(--ink-2); font-size:15px}
+.selfcheck p b{color:var(--ink)}
+.ckrow{display:flex; gap:9px; flex-wrap:wrap}
+.ckout{
+  margin-top:13px; font-size:15px; line-height:1.7; padding:0;
+}
+.ckout:not(:empty){
+  padding:13px 15px; border-radius:10px;
+  background:var(--surface-2); border:1px solid var(--line);
+}
+.ckout[data-k="warn"]:not(:empty){background:#FDF3E3; border-color:#E8D9B8; color:#6B4A12}
+.ckout[data-k="bad"]:not(:empty){background:var(--hot-soft); border-color:var(--hot)}
+:root:not([data-theme="light"]) .ckout[data-k="warn"]:not(:empty){
+  background:#33260F; border-color:#4A3D1F; color:#E8C98A}
+:root[data-theme="dark"] .ckout[data-k="warn"]:not(:empty){
+  background:#33260F; border-color:#4A3D1F; color:#E8C98A}
+
 /* 进度备份 */
 .backup{
   margin-top:12px; background:var(--surface); border:1px solid var(--line);
@@ -1012,6 +1034,18 @@ footer{
 
   <div id="roNote"></div>
 
+  <div class="section-label">这台设备能用什么</div>
+  <div class="selfcheck">
+    <p>手机上有些功能取决于系统和浏览器。<b>点一下就知道哪些能用</b>，
+      别等练到一半以为坏了。</p>
+    <div class="ckrow">
+      <button class="btn" id="ckSpeak" type="button">测朗读</button>
+      <button class="btn" id="ckMic" type="button">测跟读打分</button>
+      <button class="btn" id="ckStore" type="button">测进度保存</button>
+    </div>
+    <div class="ckout" id="ckOut"></div>
+  </div>
+
   <div class="section-label">进度备份</div>
   <div class="backup">
     <p>进度存在这台设备的浏览器里。<b>换电脑、换浏览器或清理缓存前</b>，先导出备份，
@@ -1029,7 +1063,7 @@ footer{
   <footer>
     起点 2026-08-19 · 目标 2026-12-31 能用英语做工作交流。<br>
     进度存在本机浏览器里；换设备用上面的「同步到另一台设备」。计划要调整就跟 Claude 说。<br>
-    <span class="mono" style="opacity:.65">内容版本 08-19 16:26 ·
+    <span class="mono" style="opacity:.65">内容版本 08-19 16:29 ·
       看不到最新内容就强制刷新（电脑 Ctrl/Cmd+Shift+R，手机长按刷新键）</span>
   </footer>
 </div>
@@ -3080,6 +3114,97 @@ footer{
     if(hard >= 3 && t > 8) return {dir:"down", n:hard};
     return null;
   }
+
+  // ---------- 设备自检 ----------
+  // 手机上功能可用性差异很大（尤其 iOS 加到主屏幕后），让她自己两秒查清楚，
+  // 而不是练到一半以为东西坏了。
+  function ckSay(html, kind){
+    var el = document.getElementById("ckOut");
+    el.innerHTML = html;
+    el.setAttribute("data-k", kind || "ok");
+  }
+
+  document.getElementById("ckSpeak").addEventListener("click", function(){
+    if(!window.speechSynthesis){
+      ckSay("这个浏览器不支持朗读。换 Safari 或 Chrome 打开，" +
+            "或者听力那块用「▶ 整段播放」以外的方式练。", "bad");
+      return;
+    }
+    var vs = (speechSynthesis.getVoices() || []).filter(function(v){
+      return /^en/.test(v.lang); });
+    speakText("Hello Li Mei. Can you hear me clearly?", 0.8);
+    ckSay("已经念了一句 <b>Hello Li Mei. Can you hear me clearly?</b><br>" +
+          "<b>听到声音了吗？</b><br>" +
+          "· 听到 → 朗读可用（找到 " + vs.length + " 个英语语音）<br>" +
+          "· 完全没声音 → <b>先看手机侧边的静音开关</b>（iPhone 上静音时网页朗读不出声），" +
+          "再检查音量。这一条最常见。", "ok");
+  });
+
+  document.getElementById("ckMic").addEventListener("click", function(){
+    if(!SR){
+      ckSay("这台设备的浏览器<b>不支持语音识别</b>，跟读打分用不了。<br>" +
+            "替代方案：跟读时点 🎤 会自动改成<b>录音回放</b>——录下你念的，" +
+            "跟标准音对着听，差别一听就出来。AI 对练可以打字。<br>" +
+            "想用跟读打分的话，电脑上的 Chrome 支持最好。", "warn");
+      return;
+    }
+    ckSay("正在请求麦克风，<b>说一句 “I work in game operations.”</b>…", "ok");
+    var rec = new SR();
+    rec.lang = "en-US"; rec.interimResults = false;
+    var got = false;
+    rec.onresult = function(e){
+      got = true;
+      var t = e.results[0][0].transcript;
+      ckSay("识别到：<b>" + esc(t) + "</b><br>跟读打分完全可用。", "ok");
+    };
+    rec.onerror = function(ev){
+      if(ev.error === "not-allowed" || ev.error === "service-not-allowed"){
+        ckSay("<b>麦克风权限没给</b>。手机上到「设置 → Safari →" +
+              "麦克风」允许，或在弹出的提示里点允许。<br>" +
+              "从主屏幕图标打开的话，权限要单独授权一次。", "warn");
+      }else if(ev.error === "no-speech"){
+        ckSay("没听到声音。再点一次，对着手机说 “I work in game operations.”", "warn");
+      }else{
+        ckSay("语音识别服务连不上（" + esc(ev.error) + "）。<br>" +
+              "跟读时点 🎤 会自动降级成<b>录音回放</b>，一样能用来对比发音；" +
+              "AI 对练改成打字。", "warn");
+      }
+    };
+    rec.onend = function(){
+      if(!got && document.getElementById("ckOut").getAttribute("data-k") === "ok" &&
+         /正在请求麦克风/.test(document.getElementById("ckOut").textContent)){
+        ckSay("没收到识别结果。再试一次，或者直接用录音回放。", "warn");
+      }
+    };
+    try{ rec.start(); }catch(e){ ckSay("启动失败，再点一次试试", "warn"); }
+  });
+
+  document.getElementById("ckStore").addEventListener("click", function(){
+    var ok = false, note = "";
+    try{
+      localStorage.setItem("eng133-ck", "1");
+      ok = localStorage.getItem("eng133-ck") === "1";
+      localStorage.removeItem("eng133-ck");
+    }catch(e){ note = String(e.message || e).slice(0, 60); }
+    var standalone = window.navigator.standalone === true ||
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    var days = 0;
+    for(var d = 1; d <= TOTAL; d++) if(modsDone(d) > 0) days++;
+    if(!ok){
+      ckSay("<b>进度存不下来</b>" + (note ? "（" + esc(note) + "）" : "") +
+            "。你多半在用<b>无痕/隐私模式</b>——换普通窗口打开。", "bad");
+      return;
+    }
+    ckSay("进度保存可用。当前这个入口里记着 <b>" + days + " 天</b>的练习记录。<br>" +
+          (standalone ?
+            "你现在是从<b>主屏幕图标</b>打开的。⚠️ 部分 iOS 版本里，" +
+            "主屏幕 App 和 Safari 是<b>两套独立存储</b>——如果这里显示的天数比你" +
+            "实际练的少，说明之前的记录在 Safari 那边：用 Safari 打开网址，" +
+            "点「同步到另一台设备」复制链接，再在这个 App 里打开那条链接就接上了。<br>" +
+            "接上之后<b>固定只用主屏幕这个入口</b>，别两边换着用。" :
+            "你现在是从<b>浏览器</b>打开的。建议「添加到主屏幕」后固定用图标进入，" +
+            "数据更不容易被系统清理。") , "ok");
+  });
 
   // ---------- 进度导出 / 导入 ----------
   // 本地文件模式下浏览器缓存随时可能被清，必须能把进度捞出来带走
