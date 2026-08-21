@@ -118,6 +118,16 @@ header{
 }
 .focus{color:var(--ink-2); font-size:18px}
 
+/* 落课补学入口：今天照常走，漏掉的天在这里找回来（不催、不积压） */
+.catchup{
+  display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  margin-top:14px; padding:11px 14px; border-radius:11px;
+  background:var(--surface-2); border:1px solid var(--line-2);
+  color:var(--ink-2); font-size:14.5px; line-height:1.5;
+}
+.catchup b{color:var(--ink)}
+.catchup .btn{padding:5px 12px; font-size:13.5px}
+
 /* nav between days */
 .daynav{display:flex; gap:8px; align-items:center; margin-top:18px; flex-wrap:wrap}
 .btn{
@@ -923,6 +933,10 @@ footer{
     </div>
     <h1 id="dTheme">—</h1>
     <p class="focus" id="dFocus">—</p>
+    <div class="catchup" id="catchupBox" hidden>
+      <span id="catchupMsg"></span>
+      <button class="btn" id="btnCatchup">去补 <b id="catchupDay"></b></button>
+    </div>
     <div class="daynav">
       <button class="btn" id="navPrev">← 前一天</button>
       <button class="btn" id="navToday">回到今天</button>
@@ -1168,7 +1182,7 @@ footer{
   <footer>
     起点 2026-08-19 · 目标 2026-12-31 能用英语做工作交流。<br>
     进度存在本机浏览器里；换设备用上面的「同步到另一台设备」。计划要调整就跟 Claude 说。<br>
-    <span class="mono" style="opacity:.65">内容版本 08-19 17:12 ·
+    <span class="mono" style="opacity:.65">内容版本 08-21 09:09 ·
       看不到最新内容就强制刷新（电脑 Ctrl/Cmd+Shift+R，手机长按刷新键）</span>
   </footer>
 </div>
@@ -1402,16 +1416,23 @@ footer{
             state:state};
   }
 
-  // 不含追赶逻辑的原始进度：按「学完了几天」推进，漏天不丢内容
+  // 不含追赶逻辑的原始进度：按日历天推进（起点 START + 校准偏移 offset）。
+  // 2026-08-21 改：原来按「最后一个动过的天」推进，只要不勾满四块就永远停在
+  // 同一天 —— 她用手机学、基本不在网页勾，结果第二天打开还是 Day 1。
+  // 推进权不能绑在勾选动作上；漏掉的天靠下面的「补学入口」找回，不积压。
+  // 注意：applyStart() 的基准一直是自然天，改完两边才对齐。
   function todayDayRaw(){
-    var learned = 0;
-    for(var d = 1; d <= TOTAL; d++){
-      if(modsDone(d) > 0) learned = d;      // 最后一个动过的天
+    var natural = dayDiff(START, todayStr()) + 1;
+    return Math.min(Math.max(natural + offset(), 1), TOTAL);
+  }
+
+  // 今天之前没学完的天（一块都没动，或动了但没收工），最近的排前面
+  function catchupDays(){
+    var t = todayDay(), out = [];
+    for(var d = t - 1; d >= 1; d--){
+      if(!dayFinished(d)) out.push(d);
     }
-    var next = learned + 1;
-    // 今天已经开始学了就停在今天，别往下跳
-    if(learned && modsDone(learned) < 4 && !dayFinished(learned)) next = learned;
-    return Math.min(Math.max(next + offset(), 1), TOTAL);
+    return out;
   }
 
   // 今天该学第几天：照常走会超期时，自动跳过复习日把日程压回 12-31 之内
@@ -1825,6 +1846,25 @@ footer{
     box.innerHTML = html;
   }
 
+  // 补学条：只在「看的是今天」且之前有没学完的天时露出，一次只指一天 ——
+  // 列一串会变成催债，落课不补课是定好的原则，这里只提供入口不施压。
+  function renderCatchup(){
+    var box = document.getElementById("catchupBox");
+    if(!box) return;
+    var pending = catchupDays();
+    if(view !== todayDay() || !pending.length){
+      box.hidden = true;
+      return;
+    }
+    var d = pending[0];
+    var extra = pending.length > 1 ? "（前面还有 " + (pending.length - 1) + " 天）" : "";
+    document.getElementById("catchupMsg").innerHTML =
+      "今天照常练。<b>Day " + d + "</b> 还没收工" + extra + "，想补就点，不补也不影响进度。";
+    document.getElementById("catchupDay").textContent = "Day " + d;
+    box.setAttribute("data-day", String(d));
+    box.hidden = false;
+  }
+
   function renderHead(){
     var d = CUR[view-1];
     var ph = PHASES.filter(function(p){ return view >= p.from && view <= p.to; })[0] || PHASES[0];
@@ -1837,6 +1877,8 @@ footer{
 
     document.getElementById("navPrev").disabled = view <= 1;
     document.getElementById("navNext").disabled = view >= TOTAL;
+
+    renderCatchup();
 
     var left = dayDiff(todayStr(), END);
     document.getElementById("cdChip").textContent =
@@ -2226,6 +2268,13 @@ footer{
   });
   document.getElementById("navToday").addEventListener("click", function(){
     view = todayDay(); renderAll(); window.scrollTo({top:0, behavior:"smooth"});
+  });
+
+  document.getElementById("btnCatchup").addEventListener("click", function(){
+    var d = parseInt(document.getElementById("catchupBox")
+                       .getAttribute("data-day") || "0", 10);
+    if(!d) return;
+    view = d; renderAll(); window.scrollTo({top:0, behavior:"smooth"});
   });
 
   document.getElementById("modules").addEventListener("click", function(e){
